@@ -1,0 +1,31 @@
+{{- $volumes := .Values.volumes }}
+{{ range $nodeNum := untilStep 1 ((add 1 .Values.peer.count) | int) 1 }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: azure-managed-disk-peer{{ $nodeNum }}
+  namespace: hlf
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: {{ $volumes.storageClass }}
+  resources:
+    requests:
+      storage: {{ $volumes.storageSize }}
+---
+{{ end }}
+{{ range $nodeNum := untilStep 1 ((add 1 .Values.orderer.count) | int) 1 }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: azure-managed-disk-orderer{{ $nodeNum }}
+  namespace: hlf
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: {{ $volumes.storageClass }}
+  resources:
+    requests:
+      storage: {{ $volumes.storageSize }}
+---
+{{ end }}

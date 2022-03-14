@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: org-detail
+  namespace: hlf
+data:
+  peerOrgName:       {{ .Values.peer.orgName | quote }}
+  peerDomainName:    {{ .Values.peer.domainName | quote }}
+  peerCount:         {{ .Values.peer.count | quote }}
+  ordererOrgName:    {{ .Values.orderer.orgName | quote }}
+  ordererDomainName: {{ .Values.orderer.domainName | quote }}
+  ordererCount:      {{ .Values.orderer.count | quote }}

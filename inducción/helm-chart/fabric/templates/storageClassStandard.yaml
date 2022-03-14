@@ -1,0 +1,13 @@
+{{- $storageClass := .Values.storageClass }}
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: standard
+allowVolumeExpansion: {{ $storageClass.allowVolumeExpansion }}
+provisioner: kubernetes.io/azure-disk
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+parameters:
+  storageaccounttype: {{ $storageClass.storageaccounttype }}
+  kind: Managed
+  cachingmode: {{ $storageClass.cachingmode }}

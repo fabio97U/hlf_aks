@@ -1,0 +1,228 @@
+{
+    "$schema": "https://json-schema.org/draft-07/schema#",
+    "properties": {
+        "peer": {
+            "type": "object",
+            "description": "Información de los peers a crear",
+            "properties": {
+                "orgName": {
+                    "type": "string",
+                    "description": "Nombre de la organización"
+                },
+                "domainName": {
+                    "type": "string",
+                    "description": "Nombre de dominio del AKS"
+                }
+            },
+            "required": [
+                "orgName",
+                "domainName"
+            ]
+        },
+        "orderer": {
+            "type": "object",
+            "description": "Información del orderer",
+            "properties": {
+                "orgName": {
+                    "type": "string",
+                    "description": "Nombre de la organización"
+                },
+                "domainName": {
+                    "type": "string",
+                    "description": "Nombre de dominio del AKS"
+                }
+            },
+            "required": [
+                "orgName",
+                "domainName"
+            ]
+        },
+        "channelName": {
+            "type": "string",
+            "description": "Dirección IP configurada para el Nginx",
+            "pattern": "^[a-z][a-z0-9.-]*$"
+        },
+        "useHsm": {
+            "type": "object",
+            "description": "propiedades del HSM",
+            "properties": {
+                "enabled": {
+                    "type": "boolean",
+                    "description": "Si se va a usar el HSM"
+                },
+                "hosts": {
+                    "type": "array",
+                    "description": "Nombres de los hosts del HSM"
+                },
+                "label": {
+                    "type": "string",
+                    "description": "Label del HSM"
+                },
+                "pin": {
+                    "type": "string",
+                    "description": "Pin del HSM"
+                }
+            },
+            "required": [
+                "enabled"
+            ]
+        },
+        "couchdb": {
+            "description": "Informacion de autenticación de la CouchDB",
+            "properties": {
+                "username": {
+                    "type": "string",
+                    "description": "Nombre de usuario de la CouchDB"
+                },
+                "password": {
+                    "type": "string",
+                    "description": "Clave de la CouchDB"
+                }
+            },
+            "type": "object",
+            "required": [
+                "username",
+                "password"
+            ]
+        },
+        "registries": {
+            "description": "Informacion de las imagenes",
+            "properties": {
+                "main": {
+                    "type": "object",
+                    "description": "Secreto para acceder al registry",
+                    "properties": {
+                        "registry": {
+                            "type": "string",
+                            "description": "Nombre del registry"
+                        },
+                        "username": {
+                            "type": "string",
+                            "description": "Nombre de usuario"
+                        },
+                        "password": {
+                            "type": "string",
+                            "description": "Clave"
+                        }
+                    },
+                    "required": [
+                        "registry",
+                        "username",
+                        "password"
+                    ]
+                }
+            },
+            "type": "object",
+            "required": [
+                "main"
+            ]
+        },
+        "volumes": {
+            "description": "Informacion de los discos para peer y orderer",
+            "properties": {
+                "storageClass": {
+                    "type": "string"
+                },
+                "storageSize": {
+                    "type": "string"
+                }
+            },
+            "type": "object",
+            "required": [
+                "storageClass",
+                "storageSize"
+            ]
+        },
+        "storageClass": {
+            "description": "Informacion del storage class",
+            "properties": {
+                "storageaccounttype": {
+                    "type": "string"
+                },
+                "cachingmode": {
+                    "type": "string"
+                },
+                "allowVolumeExpansion": {
+                    "type": "string"
+                }
+            },
+            "type": "object",
+            "required": [
+                "storageaccounttype",
+                "cachingmode",
+                "allowVolumeExpansion"
+            ]
+        },
+        "certificates": {
+            "description": "Certificados de la blockchain",
+            "properties": {
+                "caRoot": {
+                    "type": "string"
+                },
+                "caIntermediate": {
+                    "type": "string"
+                },
+                "peer": {
+                    "type": "object"
+                },
+                "peerTls": {
+                    "type": "object"
+                },
+                "admin": {
+                    "type": "string"
+                },
+                "adminTls": {
+                    "type": "string"
+                },
+                "orderer": {
+                    "type": "object"
+                },
+                "ordererTls": {
+                    "type": "object"
+                },
+                "ordererAdmin": {
+                    "type": "string"
+                },
+                "hsmServer": {
+                    "type": "string"
+                },
+                "hsmClient": {
+                    "type": "string"
+                }
+            },
+            "type": "object",
+            "required": [
+                "caRoot",
+                "peer",
+                "peerTls",
+                "admin",
+                "adminTls",
+                "orderer",
+                "ordererTls",
+                "ordererAdmin"
+            ]
+        },
+        "privateKeys": {
+            "description": "Llaves privadas de la blockchain",
+            "properties": {
+                "hsmClient": {
+                    "type": "string"
+                }
+            },
+            "type": "object",
+            "required": []
+        }
+    },
+    "required": [
+        "orderer",
+        "peer",
+        "couchdb",
+        "registries",
+        "volumes",
+        "certificates",
+        "privateKeys",
+        "hsm"
+    ],
+    "title": "Values",
+    "type": "object"
+}

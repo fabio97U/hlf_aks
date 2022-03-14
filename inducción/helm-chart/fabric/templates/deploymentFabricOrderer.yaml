@@ -1,0 +1,274 @@
+{{- $hsmEnabled := .Values.hsm.enabled }}
+{{- $peerCount := .Values.peer.count }}
+{{- $ordererCount := .Values.orderer.count }}
+{{- $orgName := .Values.orderer.orgName }}
+{{- $clusterIp := .Values.clusterIpAddress }}
+{{- $peerDomain := .Values.peer.domainName }}
+{{- $ordererDomain := .Values.orderer.domainName }}
+{{- $localDns := .Values.localDns }}
+{{- $caIntermediateCert := .Values.certificates.caIntermediate }}
+{{- $caIntermediateTlsCert := .Values.certificates.caIntermediateTls }}
+{{- $hsmOrdererDockerImage := .Values.hsm.ordererDockerImage }}
+{{- $hsmLibrary := .Values.hsm.library }}
+{{- $podResources := .Values.podResources }}
+{{- range $nodeNum := untilStep 1 ((add 1 $ordererCount) | int) 1 }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: orderer{{ $nodeNum }}
+  labels:
+    run: orderer{{ $nodeNum }}
+  namespace: hlf
+spec:
+  type: ClusterIP
+  selector:
+    name: orderer{{ $nodeNum }}
+  ports:
+  - protocol: TCP
+    port: 7050
+    name: grpc
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orderer{{ $nodeNum }}
+  namespace: hlf
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: orderer{{ $nodeNum }}
+  template:
+    metadata:
+      annotations:
+        prometheus.io/port: "8443"
+        prometheus.io/scrape: "true"
+      labels:
+        name: orderer{{ $nodeNum }}
+    spec:
+      {{- if $localDns }}
+      hostAliases:
+      - ip: {{ $clusterIp | quote }}
+        hostnames:
+        {{- range $nodeNum := untilStep 1 ((add 1 $peerCount) | int) 1 }}
+        - "peer{{ $nodeNum }}.{{ $peerDomain }}"
+        {{- end }}
+        {{- range $nodeNum := untilStep 1 ((add 1 $ordererCount) | int) 1 }}
+        - "orderer{{ $nodeNum }}.{{ $ordererDomain }}"
+        {{- end }}
+      {{- end }}          
+      imagePullSecrets:
+      - name: registry-secret
+      containers:
+      - name: orderer
+        {{- if $hsmEnabled }}
+        image: {{ $hsmOrdererDockerImage }}
+        {{ else }}
+        image: hyperledger/fabric-orderer:2.4
+        {{- end }}
+        resources:
+          {{- toYaml $podResources.orderer | nindent 10 }}
+        command: ["sh", "-c", "orderer"]
+        workingDir: /var/hyperledger/orderer 
+
+        env:
+        - name: ORDERER_GENERAL_LEDGERTYPE
+          value: file
+        - name: CONFIGTX_ORDERER_ADDRESSES
+          value: "orderer{{ $nodeNum }}:7050"
+        - name: ORDERER_GENERAL_LISTENADDRESS
+          value: 0.0.0.0
+        - name: ORDERER_GENERAL_LISTENPORT
+          value: "7050"
+        - name: FABRIC_LOGGING_SPEC
+          value: "grpc=debug:info"
+        - name: ORDERER_GENERAL_LOCALMSPDIR
+          value: "/var/hyperledger/orderer/msp"
+        - name: ORDERER_GENERAL_LOCALMSPID
+          value: {{ $orgName }}
+        - name: ORDERER_GENERAL_GENESISMETHOD
+          value: file
+        - name: ORDERER_GENERAL_GENESISFILE
+          value: "/var/hyperledger/orderer/genesis.block"
+        - name: ORDERER_GENERAL_GENESISPROFILE
+          value: initial
+        - name: ORDERER_GENERAL_TLS_ENABLED
+          value: "true"
+        - name: ORDERER_GENERAL_TLS_PRIVATEKEY
+          value: "/var/hyperledger/orderer/tls/server.key"
+        - name: ORDERER_GENERAL_TLS_CERTIFICATE
+          value: "/var/hyperledger/orderer/tls/server.crt"
+        - name: ORDERER_GENERAL_TLS_ROOTCAS
+          value: "/var/hyperledger/orderer/tls/chain.crt"
+        - name: ORDERER_GENERAL_TLS_CLIENTAUTHREQUIRED
+          valueFrom:
+            configMapKeyRef:
+              name: mutual-tls
+              key: enabled
+        - name: ORDERER_GENERAL_TLS_CLIENTROOTCAS
+          value: "/var/hyperledger/orderer/tls/chain.crt"
+        - name: ORDERER_GENERAL_CLUSTER_CLIENTPRIVATEKEY
+          value: "/var/hyperledger/orderer/tls/server.key"
+        - name: ORDERER_GENERAL_CLUSTER_CLIENTCERTIFICATE
+          value: "/var/hyperledger/orderer/tls/server.crt"
+        - name: ORDERER_GENERAL_CLUSTER_ROOTCAS
+          value: "/var/hyperledger/orderer/tls/chain.crt"
+        - name: GODEBUG
+          value: "netdns=go,x509ignoreCN=0"
+        - name: ORDERER_OPERATIONS_LISTENADDRESS
+          value: :8443
+        - name: ORDERER_METRICS_PROVIDER
+          value: prometheus
+        {{- if $hsmEnabled }}
+        - name:  ORDERER_GENERAL_BCCSP_DEFAULT
+          value: "PKCS11"
+        - name: ORDERER_GENERAL_BCCSP_PKCS11_LIBRARY
+          value: {{ $hsmLibrary }}
+        - name: ORDERER_GENERAL_BCCSP_PKCS11_PIN
+          valueFrom:
+            secretKeyRef:
+              name: hsm-authentication
+              key: pin
+        - name: ORDERER_GENERAL_BCCSP_PKCS11_LABEL
+          valueFrom:
+            secretKeyRef:
+              name: hsm-authentication
+              key: label
+        - name:  ChrystokiConfigurationPath
+          value: "/usr/local/luna/config"
+        - name: ORDERER_GENERAL_BCCSP_PKCS11_HASH
+          value: "SHA2"
+        - name: ORDERER_GENERAL_BCCSP_PKCS11_SECURITY
+          value: "256"
+        - name: ORDERER_GENERAL_BCCSP_PKCS11_FILEKEYSTORE_KEYSTORE
+          value: "msp/keystore"
+          {{- end }}
+
+        volumeMounts:
+        - mountPath: /var/hyperledger/production/orderer/
+          name: fabric-storage
+          subPath: orderer{{ $nodeNum }}
+        - mountPath: /var/hyperledger/orderer/genesis.block
+          name: genesisblock
+          subPath: genesisblock
+          readOnly: true
+        - mountPath: /var/hyperledger/orderer/msp/admincerts
+          name: admincerts
+          readOnly: true
+        - mountPath: /var/hyperledger/orderer/msp/cacerts
+          name: cacerts
+          readOnly: true
+        {{- if not (empty $caIntermediateCert) }}
+        - mountPath: /var/hyperledger/orderer/msp/intermediatecerts
+          name: intermediatecerts
+          readOnly: true
+        {{- end }}
+        - mountPath: /var/hyperledger/orderer/msp/keystore
+          name: keystore
+          readOnly: true
+        - mountPath: /var/hyperledger/orderer/msp/signcerts
+          name: signcerts
+          readOnly: true
+        - mountPath: /var/hyperledger/orderer/tls/server.key
+          name: tls-keystore
+          subPath: server.key
+          readOnly: true
+        - mountPath: /var/hyperledger/orderer/tls/server.crt
+          name: tls-signcerts
+          subPath: server.crt
+          readOnly: true
+        - mountPath: /var/hyperledger/orderer/tls/ca.crt
+          name: tls-cacerts
+          subPath: ca.crt
+          readOnly: true
+        {{- if not (empty $caIntermediateTlsCert) }}
+        - mountPath: /var/hyperledger/orderer/tls/intermediate.crt
+          name: tls-intermediatecerts
+          subPath: intermediate.crt
+          readOnly: true
+        {{- end }}
+        - mountPath: /var/hyperledger/orderer/tls/chain.crt
+          name: tls-cachaincert
+          subPath: chain.crt
+          readOnly: true
+        {{- if $hsmEnabled }}
+        - mountPath: /usr/local/luna/config/certs/server.pem
+          name: hsm-server-cert
+          subPath: server.pem
+          readOnly: true
+        - mountPath: /usr/local/luna/config/certs/VMSS01.pem
+          name: hsm-client-cert
+          subPath: VMSS01.pem
+          readOnly: true
+        - mountPath: /usr/local/luna/config/certs/VMSS01Key.pem
+          name: hsm-client-key
+          subPath: VMSS01Key.pem
+          readOnly: true
+        - mountPath: /usr/local/luna/config/Chrystoki.conf 
+          name: chrystoki-conf
+          subPath: Chrystoki.conf 
+          readOnly: true
+        {{- end }}
+
+      volumes:
+      - name: fabric-storage
+        persistentVolumeClaim:
+          claimName: azure-managed-disk-orderer{{ $nodeNum }}
+      - name: genesisblock
+        secret:
+          secretName: hlf-genesis-block
+      - name: admincerts
+        secret:
+          secretName: hlf-orderer-admin-idcert
+      - name: signcerts
+        secret:
+          secretName: hlforderer{{ $nodeNum }}-idcert
+      - name: keystore
+        {{- if $hsmEnabled }}
+        emptyDir: {}
+        {{- else }}
+        secret:
+           secretName: hlforderer{{ $nodeNum }}-idkey
+        {{- end }}
+      - name: cacerts
+        secret:
+          secretName: hlf-ca-root-idcert
+      {{- if not (empty $caIntermediateCert) }}
+      - name: intermediatecerts
+        secret:
+          secretName: hlf-ca-intermediate-idcert
+      {{- end }}
+      - name: tls-cacerts
+        secret:
+          secretName: hlf-ca-root-idcert
+      {{- if not (empty $caIntermediateTlsCert) }}
+      - name: tls-intermediatecerts
+        secret:
+          secretName: hlf-ca-intermediate-idcert
+      {{- end }}
+      - name: tls-cachaincert
+        secret:
+          secretName: hlf-ca-chain-tls-idcert
+      - name: tls-keystore
+        secret:
+           secretName: hlforderer{{ $nodeNum }}-tls-idkey
+      - name: tls-signcerts
+        secret:
+          secretName: hlforderer{{ $nodeNum }}-tls-idcert
+      {{- if $hsmEnabled }}
+      - name: chrystoki-conf
+        secret:
+          secretName: chrystoki-conf
+      - name: hsm-server-cert
+        secret:
+          secretName: hsm-server-cert
+      - name: hsm-client-cert
+        secret:
+          secretName: hsm-client-cert
+      - name: hsm-client-key
+        secret:
+          secretName: hsm-client-key
+      {{- end }}
+
+---
+{{ end }}

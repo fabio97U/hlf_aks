@@ -1,0 +1,101 @@
+orderer:
+  count: 2
+  orgName: epm
+  domainName: "blockchainnp.epm.com.co"
+peer:
+  count: 2
+  orgName: epm
+  domainName: "blockchainnp.epm.com.co"
+nginxingress:  
+  clusterIpAddress: "10.253.4.226"
+podResources:
+  couchdb:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 512Mi  
+  peer:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 800m
+      memory: 2048Mi  
+  orderer:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 800m
+      memory: 512Mi  
+channelName: "canalenergia"
+localDns: true
+hsm:
+  enabled: false
+  hosts:
+    - "localhost"
+  library: "/usr/lib/softhsm/libsofthsm2.so"
+  label: "keys"
+  pin: "p4ssw0rd"
+  serialNumber: "150143008"
+  peerDockerImage: "acrepmnp.azurecr.io/epm-autogeneradores-blockchain-fabric-peer:2.3-softhsm"
+  ordererDockerImage: "acrepmnp.azurecr.io/epm-autogeneradores-blockchain-fabric-orderer:2.3-softhsm"
+  toolsDockerImage: "acrepmnp.azurecr.io/epm-autogeneradores-blockchain-fabric-tools:2.3-softhsm"
+couchdb:
+  username: "admin"
+  password: "p4ssw0rd"
+registries:
+  main:
+    registry: "acrepmnp.azurecr.io"
+    username: "ACREPMNP"
+    password: ""
+volumes:
+  storageClass: "default"
+  storageSize: "50Gi"
+storageClass:
+  storageaccounttype: "StandardSSD_LRS"
+  cachingmode: "ReadOnly"
+  allowVolumeExpansion: "true"
+certificates:
+  caRoot:            ""
+  caIntermediate:    ""
+  caRootTls:         ""
+  caIntermediateTls: ""
+  admin:             ""
+  adminTls:          ""
+  ordererAdmin:      ""
+  ordererAdminTls:   ""
+  peer: 
+    1: ""
+    2: ""
+  peerTls: 
+    1: ""
+    2: ""
+  orderer: 
+    1: ""
+    2: ""
+  ordererTls: 
+    1: ""
+    2: ""
+  hsmServer: ""
+  hsmClient: ""
+privateKeys:
+  admin:           ""
+  adminTls:        ""
+  ordererAdmin:    ""
+  ordererAdminTls: ""
+  peer: 
+    1: ""
+    2: ""
+  peerTls: 
+    1: ""
+    2: ""
+  orderer: 
+    1: ""
+    2: ""
+  ordererTls: 
+    1: ""
+    2: ""
+  hsmClient: ""

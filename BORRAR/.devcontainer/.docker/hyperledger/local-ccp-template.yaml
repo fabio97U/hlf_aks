@@ -1,0 +1,262 @@
+---
+name: test-network-org1
+version: 1.0.0
+client:
+  organization: Org1
+  logging:
+    level: info
+  connection:
+    timeout:
+      peer:
+        endorser: "300"
+  # Root of the MSP directories with keys and certs.
+  cryptoconfig:
+    path: ##FABRIC_SAMPLE_CONFIG_PATH##
+
+  # Some SDKs support pluggable KV stores, the properties under "credentialStore"
+  # are implementation specific
+  credentialStore:
+    path: ##FABRIC_SAMPLE_USERS_CREDENTIAL_STORE_PATH##
+    # [Optional]. Specific to the CryptoSuite implementation used by GO SDK. Software-based implementations
+    # requiring a key store. PKCS#11 based implementations does not.
+    cryptoStore:
+      path: ##FABRIC_SAMPLE_ADMIN_MSP_PATH##
+    # BCCSP config for the client. Used by GO SDK.
+  BCCSP:
+    security:
+      enabled: true
+      default:
+        provider: "SW"
+      hashAlgorithm: "SHA2"
+      softVerify: true
+      level: 256
+
+  tlsCerts:
+    # [Optional]. Use system certificate pool when connecting to peers, orderers (for negotiating TLS) Default: false
+    systemCertPool: false
+
+    # [Optional]. Client key and cert for TLS handshake with peers and orderers
+    client:
+      certfile:
+        path: ##CLIENT_CERT_FILE_PATH##
+      keyfile:
+        path: ##CLIENT_CERT_KEY_PATH##
+
+organizations:
+  Org1:
+    mspid: Org1MSP
+    cryptoPath: ##ORG1_CRYPTO_PATH##
+    peers:
+      - peer0.org1.example.com
+  Org2:
+    mspid: Org2MSP
+    cryptoPath: ##ORG2_CRYPTO_PATH##
+    peers:
+    - peer0.org2.example.com
+
+peers:
+  peer0.org1.example.com:
+    url: grpcs://localhost:7051
+    tlsCACerts:
+      path: ##PEERS_TLS_CA_CERT_PATH##
+
+    grpcOptions:
+      ssl-target-name-override: peer0.org1.example.com
+      hostnameOverride: peer0.org1.example.com
+      # These parameters should be set in coordination with the keepalive policy on the server,
+      # as incompatible settings can result in closing of connection.
+      # When duration of the 'keep-alive-time' is set to 0 or less the keep alive client parameters are disabled
+      keep-alive-time: 10s
+      keep-alive-timeout: 20s
+      keep-alive-permit: false
+      fail-fast: false
+    tlsCACerts:
+      # Certificate location absolute path
+      path: ##PEERS_TLS_CA_CERT_PATH##
+
+    httpOptions:
+      verify: false
+
+  peer0.org2.example.com:
+    url: grpcs://localhost:9051
+    tlsCACerts:
+      path: ##PEERS_TLS_CA_CERT_PATH##
+    grpcOptions:
+      ssl-target-name-override: peer0.org2.example.com
+      hostnameOverride: peer0.org2.example.com
+      # These parameters should be set in coordination with the keepalive policy on the server,
+      # as incompatible settings can result in closing of connection.
+      # When duration of the 'keep-alive-time' is set to 0 or less the keep alive client parameters are disabled
+      keep-alive-time: 10s
+      keep-alive-timeout: 20s
+      keep-alive-permit: false
+      fail-fast: false
+    tlsCACerts:
+      # Certificate location absolute path
+      path: ##PEERS_TLS_CA_CERT_PATH##
+
+
+channels:
+  # name of the channel
+  ##CHANNEL_NAME##:
+    # Required. list of orderers designated by the application to use for transactions on this
+    # channel. This list can be a result of access control ("org1" can only access "ordererA"), or
+    # operational decisions to share loads from applications among the orderers.  The values must
+    # be "names" of orgs defined under "organizations/peers"
+    # deprecated: not recommended, to override any orderer configuration items, entity matchers should be used.
+    # orderers:
+    #  - orderer.example.com
+
+    # Required. list of peers from participating orgs
+    peers:
+      peer0.org1.example.com:
+        # [Optional]. will this peer be sent transaction proposals for endorsement? The peer must
+        # have the chaincode installed. The app can also use this property to decide which peers
+        # to send the chaincode install request. Default: true
+        endorsingPeer: true
+
+        # [Optional]. will this peer be sent query proposals? The peer must have the chaincode
+        # installed. The app can also use this property to decide which peers to send the
+        # chaincode install request. Default: true
+        chaincodeQuery: true
+
+        # [Optional]. will this peer be sent query proposals that do not require chaincodes, like
+        # queryBlock(), queryTransaction(), etc. Default: true
+        ledgerQuery: true
+
+        # [Optional]. will this peer be the target of the SDK's listener registration? All peers can
+        # produce events but the app typically only needs to connect to one to listen to events.
+        # Default: true
+        eventSource: true
+
+      peer0.org2.example.com:
+        # [Optional]. will this peer be sent transaction proposals for endorsement? The peer must
+        # have the chaincode installed. The app can also use this property to decide which peers
+        # to send the chaincode install request. Default: true
+        endorsingPeer: true
+
+        # [Optional]. will this peer be sent query proposals? The peer must have the chaincode
+        # installed. The app can also use this property to decide which peers to send the
+        # chaincode install request. Default: true
+        chaincodeQuery: true
+
+        # [Optional]. will this peer be sent query proposals that do not require chaincodes, like
+        # queryBlock(), queryTransaction(), etc. Default: true
+        ledgerQuery: true
+
+        # [Optional]. will this peer be the target of the SDK's listener registration? All peers can
+        # produce events but the app typically only needs to connect to one to listen to events.
+        # Default: true
+        eventSource: true
+
+    policies:
+      #[Optional] options for retrieving channel configuration blocks
+      queryChannelConfig:
+        #[Optional] min number of success responses (from targets/peers)
+        minResponses: 1
+        #[Optional] channel config will be retrieved for these number of random targets
+        maxTargets: 1
+        #[Optional] retry options for query config block
+        retryOpts:
+          #[Optional] number of retry attempts
+          attempts: 5
+          #[Optional] the back off interval for the first retry attempt
+          initialBackoff: 500ms
+          #[Optional] the maximum back off interval for any retry attempt
+          maxBackoff: 5s
+          #[Optional] he factor by which the initial back off period is exponentially incremented
+          backoffFactor: 2.0
+
+#
+# Copyright SecureKey Technologies Inc. All Rights Reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+#
+# The network connection profile provides client applications the information about the target
+# blockchain network that are necessary for the applications to interact with it. These are all
+# knowledge that must be acquired from out-of-band sources. This file provides such a source.
+#
+
+# EntityMatchers enable substitution of network hostnames with static configurations
+# so that properties can be mapped. Regex can be used for this purpose
+# UrlSubstitutionExp can be empty which means the same network hostname will be used
+# UrlSubstitutionExp can be given same as mapped peer url, so that mapped peer url can be used
+# UrlSubstitutionExp can have golang regex matchers like ${1}.example.${2}:${3} for pattern
+# like peer0.org1.example.com:1234 which converts peer0.org1.example.com to peer0.org1.example.com:1234
+# sslTargetOverrideUrlSubstitutionExp follow in the same lines as
+# SubstitutionExp for the fields gprcOptions.ssl-target-name-override respectively
+# In any case mappedHost's config will be used, so mapped host cannot be empty, if entityMatchers are used
+entityMatchers:
+  peer:
+    - pattern: peer0.org1.example.(\w+)
+      urlSubstitutionExp: localhost:7051
+      sslTargetOverrideUrlSubstitutionExp: peer0.org1.example.com
+      mappedHost: peer0.org1.example.com
+
+    - pattern: peer1.org1.example.(\w+)
+      urlSubstitutionExp: localhost:8051
+      sslTargetOverrideUrlSubstitutionExp: peer1.org1.example.com
+      mappedHost: peer1.org1.example.com
+
+    - pattern: peer0.org2.example.(\w+)
+      urlSubstitutionExp: localhost:9051
+      sslTargetOverrideUrlSubstitutionExp: peer0.org2.example.com
+      mappedHost: peer0.org2.example.com
+
+    - pattern: peer1.org2.example.(\w+)
+      urlSubstitutionExp: localhost:10051
+      sslTargetOverrideUrlSubstitutionExp: peer1.org2.example.com
+      mappedHost: peer1.org2.example.com
+
+    - pattern: (\w+).org1.example.(\w+):(\d+)
+      urlSubstitutionExp: localhost:${2}
+      sslTargetOverrideUrlSubstitutionExp: ${1}.org1.example.com
+      mappedHost: ${1}.org1.example.com
+
+    - pattern: (\w+).org2.example.(\w+):(\d+)
+      urlSubstitutionExp: localhost:${2}
+      sslTargetOverrideUrlSubstitutionExp: ${1}.org2.example.com
+      mappedHost: ${1}.org2.example.com
+
+    - pattern: (\w+):7051
+      urlSubstitutionExp: localhost:7051
+      sslTargetOverrideUrlSubstitutionExp: peer0.org1.example.com
+      mappedHost: peer0.org1.example.com
+
+    - pattern: (\w+):8051
+      urlSubstitutionExp: localhost:8051
+      sslTargetOverrideUrlSubstitutionExp: peer1.org1.example.com
+      mappedHost: peer1.org1.example.com
+
+    - pattern: (\w+):9051
+      urlSubstitutionExp: localhost:9051
+      sslTargetOverrideUrlSubstitutionExp: peer0.org2.example.com
+      mappedHost: peer0.org2.example.com
+
+    - pattern: (\w+):10051
+      urlSubstitutionExp: localhost:10051
+      sslTargetOverrideUrlSubstitutionExp: peer1.org2.example.com
+      mappedHost: peer1.org2.example.com
+
+  orderer:
+    - pattern: (\w+).example.(\w+)
+      urlSubstitutionExp: localhost:7050
+      sslTargetOverrideUrlSubstitutionExp: orderer.example.com
+      mappedHost: orderer.example.com
+
+    - pattern: (\w+).example.(\w+):(\d+)
+      urlSubstitutionExp: localhost:7050
+      sslTargetOverrideUrlSubstitutionExp: orderer.example.com
+      mappedHost: orderer.example.com
+
+  certificateAuthority:
+    - pattern: (\w+).org1.example.(\w+)
+      urlSubstitutionExp: https://localhost:7054
+      sslTargetOverrideUrlSubstitutionExp: ca.org1.example.com
+      mappedHost: ca.org1.example.com
+
+    - pattern: (\w+).org2.example.(\w+)
+      urlSubstitutionExp: https://localhost:8054
+      sslTargetOverrideUrlSubstitutionExp: ca.org2.example.com
+      mappedHost: ca.org2.example.com

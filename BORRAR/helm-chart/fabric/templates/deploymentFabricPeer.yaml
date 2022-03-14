@@ -1,0 +1,336 @@
+{{- $hsmEnabled := .Values.hsm.enabled }}
+{{- $orgName := .Values.peer.orgName }}
+{{- $clusterIp := .Values.clusterIpAddress }}
+{{- $peerDomain := .Values.peer.domainName }}
+{{- $ordererDomain := .Values.orderer.domainName }}
+{{- $peerCount := .Values.peer.count }}
+{{- $ordererCount := .Values.orderer.count }}
+{{- $localDns := .Values.localDns }}
+{{- $caIntermediateCert := .Values.certificates.caIntermediate }}
+{{- $caIntermediateTlsCert := .Values.certificates.caIntermediateTls }}
+{{- $hsmPeerDockerImage := .Values.hsm.peerDockerImage }}
+{{- $hsmLibrary := .Values.hsm.library }}
+{{- $podResources := .Values.podResources }}
+{{- range $nodeNum := untilStep 1 ((add 1 .Values.peer.count) | int) 1 }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: peer{{ $nodeNum }}
+  namespace: hlf
+spec:
+  selector:
+    name: peer{{ $nodeNum }}
+  ports:
+    - name: external-listen-endpoint
+      protocol: TCP
+      port: 7051
+      targetPort: 7051
+    - name: chaincode-listen
+      protocol: TCP
+      port: 7052
+      targetPort: 7052
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: peer{{ $nodeNum }}
+  namespace: hlf
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: peer{{ $nodeNum }}
+  template:
+    metadata:
+      annotations:
+        prometheus.io/port: "8443"
+        prometheus.io/scrape: "true"
+      labels:
+        name: peer{{ $nodeNum }}
+    spec:
+      {{- if $localDns }}
+      hostAliases:
+      - ip: {{ $clusterIp | quote }}
+        hostnames:
+        {{- range $nodeNum := untilStep 1 ((add 1 $peerCount) | int) 1 }}
+        - "peer{{ $nodeNum }}.{{ $peerDomain }}"
+        {{- end }}
+        {{- range $nodeNum := untilStep 1 ((add 1 $ordererCount) | int) 1 }}
+        - "orderer{{ $nodeNum }}.{{ $ordererDomain }}"
+        {{- end }}          
+      {{- end }}          
+      imagePullSecrets:
+      - name: registry-secret
+
+      containers:
+      - name: couchdb{{ $nodeNum }}
+        image: couchdb:3.1.1
+        resources:
+          {{- toYaml $podResources.couchdb | nindent 10 }}
+        ports:
+        - containerPort: 5984  
+        volumeMounts:
+        - mountPath: /opt/couchdb/data/
+          name: fabric-storage
+          subPath: peer{{ $nodeNum }}-couchdb
+        env:
+        - name: COUCHDB_USER
+          valueFrom:
+            secretKeyRef:
+              name: couchdb-secret
+              key: username
+        - name: COUCHDB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: couchdb-secret
+              key: password
+
+      - name: peer{{ $nodeNum }}
+        {{- if $hsmEnabled }}
+        image: {{ $hsmPeerDockerImage }}
+        {{ else }}
+        image: hyperledger/fabric-peer:2.4
+        {{- end }}
+        workingDir: /opt/gopath/src/github.com/hyperledger/fabric/peer
+        resources:
+          {{- toYaml $podResources.peer | nindent 10 }}
+        ports:
+        - containerPort: 7051
+        - containerPort: 7052
+        command: ["sh", "-c", "peer node start"]
+
+        env:
+        - name: GODEBUG
+          value: x509ignoreCN=0
+        - name: CORE_LEDGER_STATE_STATEDATABASE
+          value: "CouchDB"
+        - name: CORE_LEDGER_STATE_COUCHDBCONFIG_COUCHDBADDRESS
+          value: "localhost:5984"
+        - name: CORE_VM_ENDPOINT
+          value: tcp://docker:2375
+        - name: CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE
+          value: "bridge"
+        - name: FABRIC_LOGGING_SPEC
+          value: "grpc=debug:info"
+        - name: CORE_VM_DOCKER_ATTACHSTDOUT
+          value: "true"
+        - name: CORE_PEER_TLS_ENABLED
+          value: "true"
+        - name: CORE_PEER_GOSSIP_USELEADERELECTION
+          value: "true"
+        - name: CORE_PEER_GOSSIP_ORGLEADER
+          value: "false" 
+        - name: CORE_PEER_PROFILE_ENABLED
+          value: "true"
+        - name: CORE_PEER_MSPCONFIGPATH
+          value: "/var/hyperledger/peer/msp"
+        - name: CORE_PEER_TLS_CERT_FILE
+          value: "/var/hyperledger/peer/tls/server.crt" 
+        - name: CORE_PEER_TLS_ROOTCERT_FILE
+          value: "/var/hyperledger/peer/tls/chain.crt"
+        - name: CORE_PEER_TLS_CLIENTAUTHREQUIRED
+          valueFrom:
+            configMapKeyRef:
+              name: mutual-tls
+              key: enabled
+        - name: CORE_PEER_TLS_CLIENTCERT_FILE
+          value: "/var/hyperledger/peer/tls/server.crt"
+        - name: CORE_PEER_TLS_KEY_FILE
+          value: "/var/hyperledger/peer/tls/server.key"
+        - name: CORE_PEER_TLS_CLIENTKEY_FILE
+          value: "/var/hyperledger/peer/tls/server.key"
+        - name: CORE_PEER_TLS_CLIENTROOTCAS_FILES
+          value: "/var/hyperledger/peer/tls/chain.crt"
+        - name: CORE_PEER_ID
+          value: peer{{ $nodeNum }}
+        - name: CORE_PEER_ADDRESS
+          value: peer{{ $nodeNum }}:7051
+        - name: CORE_PEER_LISTENADDRESS
+          value: 0.0.0.0:7051
+        - name: CORE_PEER_GOSSIP_EXTERNALENDPOINT
+          value: peer{{ $nodeNum }}.{{ $peerDomain }}:443
+        - name: CORE_PEER_ADDRESSAUTODETECT
+          value: "true"
+        - name: CORE_PEER_LOCALMSPID
+          value: {{ $orgName }}
+        - name: CORE_CHAINCODE_BUILDER
+          value: hyperledger/fabric-ccenv:2.3
+        - name: CORE_CHAINCODE_GOLANG_RUNTIME
+          value: hyperledger/fabric-baseos:2.3
+        - name: CORE_CHAINCODE_NODE_RUNTIME
+          value: hyperledger/fabric-nodeenv:2.3
+        - name: CORE_CHAINCODE_CAR_RUNTIME
+          value: ""
+        - name: CORE_CHAINCODE_JAVA_RUNTIME
+          value: hyperledger/fabric-javaenv:2.3
+        - name: CORE_OPERATIONS_LISTENADDRESS
+          value: :8443
+        - name: CORE_METRICS_PROVIDER
+          value: prometheus
+        - name: CORE_LEDGER_STATE_COUCHDBCONFIG_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: couchdb-secret
+              key: username
+        - name: CORE_LEDGER_STATE_COUCHDBCONFIG_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: couchdb-secret
+              key: password
+        {{- if $hsmEnabled }}
+        - name:  CORE_PEER_BCCSP_DEFAULT
+          value: "PKCS11"
+        - name: CORE_PEER_BCCSP_PKCS11_LIBRARY
+          value: {{ $hsmLibrary }}
+        - name: CORE_PEER_BCCSP_PKCS11_PIN
+          valueFrom:
+            secretKeyRef:
+              name: hsm-authentication
+              key: pin
+        - name: CORE_PEER_BCCSP_PKCS11_LABEL
+          valueFrom:
+            secretKeyRef:
+              name: hsm-authentication
+              key: label
+        - name:  ChrystokiConfigurationPath
+          value: "/usr/local/luna/config"
+        - name: CORE_PEER_BCCSP_PKCS11_HASH
+          value: "SHA2"
+        - name: CORE_PEER_BCCSP_PKCS11_SECURITY
+          value: "256"
+        - name: CORE_PEER_BCCSP_PKCS11_FILEKEYSTORE_KEYSTORE
+          value: "msp/keystore"
+        {{- end }}
+              
+        volumeMounts:
+        - mountPath: /var/hyperledger/production/
+          name: fabric-storage
+          subPath: peer{{ $nodeNum }}
+        - mountPath: /etc/hyperledger/fabric/core.yaml
+          name: hlf-core
+          subPath: core.yaml
+          readOnly: true
+        - mountPath: /var/hyperledger/peer/msp/admincerts
+          name: admincerts
+          readOnly: true
+        - mountPath: /var/hyperledger/peer/msp/cacerts
+          name: cacerts
+          readOnly: true
+        {{- if not (empty $caIntermediateCert) }}
+        - mountPath: /var/hyperledger/peer/msp/intermediatecerts
+          name: intermediatecerts
+          readOnly: true
+        {{- end }}
+        - mountPath: /var/hyperledger/peer/msp/signcerts
+          name: signcerts
+          readOnly: true
+        - mountPath: /var/hyperledger/peer/msp/keystore
+          name: keystore
+          readOnly: true
+        - mountPath: /var/hyperledger/peer/tls/server.crt
+          name: tls-signcerts
+          subPath: server.crt
+          readOnly: true
+        - mountPath: /var/hyperledger/peer/tls/server.key
+          name: tls-keystore
+          subPath: server.key
+          readOnly: true
+        - mountPath: /var/hyperledger/peer/tls/ca.crt
+          name: tls-cacerts
+          subPath: ca.crt
+          readOnly: true
+        {{- if not (empty $caIntermediateTlsCert) }}
+        - mountPath: /var/hyperledger/peer/tls/intermediate.crt
+          name: tls-intermediatecerts
+          subPath: intermediate.crt
+          readOnly: true
+        {{- end }}
+        - mountPath: /var/hyperledger/peer/tls/chain.crt
+          name: tls-cachaincert
+          subPath: chain.crt
+          readOnly: true
+        - mountPath: /host/var/run/
+          name: run
+        {{- if $hsmEnabled }}
+        - mountPath: /usr/local/luna/config/certs/server.pem
+          name: hsm-server-cert
+          subPath: server.pem
+          readOnly: true
+        - mountPath: /usr/local/luna/config/certs/VMSS01.pem
+          name: hsm-client-cert
+          subPath: VMSS01.pem
+          readOnly: true
+        - mountPath: /usr/local/luna/config/certs/VMSS01Key.pem
+          name: hsm-client-key
+          subPath: VMSS01Key.pem
+          readOnly: true
+        - mountPath: /usr/local/luna/config/Chrystoki.conf 
+          name: chrystoki-conf
+          subPath: Chrystoki.conf 
+          readOnly: true
+        {{- end }}
+
+      volumes:
+        - name: run
+          hostPath:
+            path: /run
+        - name: fabric-storage
+          persistentVolumeClaim:
+            claimName: azure-managed-disk-peer{{ $nodeNum }}
+        - name: hlf-core
+          secret:
+            secretName: hlf-core
+        - name: admincerts
+          secret:
+            secretName: hlf-admin-idcert
+        - name: signcerts
+          secret:
+            secretName: hlfpeer{{ $nodeNum }}-idcert
+        - name: keystore
+        {{- if $hsmEnabled }}
+          emptyDir: {}
+        {{- else }}
+          secret:
+            secretName: hlfpeer{{ $nodeNum }}-idkey
+        {{- end }}
+        - name: cacerts
+          secret:
+            secretName: hlf-ca-root-idcert
+        {{- if not (empty $caIntermediateCert) }}
+        - name: intermediatecerts
+          secret:
+            secretName: hlf-ca-intermediate-idcert
+        {{- end }}
+        - name: tls-cacerts
+          secret:
+            secretName: hlf-ca-root-idcert
+        {{- if not (empty $caIntermediateTlsCert) }}
+        - name: tls-intermediatecerts
+          secret:
+            secretName: hlf-ca-intermediate-idcert
+        {{- end }}
+        - name: tls-cachaincert
+          secret:
+            secretName: hlf-ca-chain-tls-idcert
+        - name: tls-signcerts
+          secret:
+            secretName: hlfpeer{{ $nodeNum }}-tls-idcert
+        - name: tls-keystore
+          secret:
+            secretName: hlfpeer{{ $nodeNum }}-tls-idkey
+        {{- if $hsmEnabled }}
+        - name: chrystoki-conf
+          secret:
+            secretName: chrystoki-conf
+        - name: hsm-server-cert
+          secret:
+            secretName: hsm-server-cert
+        - name: hsm-client-cert
+          secret:
+            secretName: hsm-client-cert
+        - name: hsm-client-key
+          secret:
+            secretName: hsm-client-key
+        {{- end }}
+---
+{{ end }}

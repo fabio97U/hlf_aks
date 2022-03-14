@@ -1,0 +1,89 @@
+{{- if (eq (include "fabric.genesissecret" .) "ZW1wdHk=") -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: "generate-genesis-job"
+  namespace: hlf
+spec:
+  template:
+    spec:
+      serviceAccountName: hlf-genesis
+      imagePullSecrets:
+      - name: registry-secret
+      restartPolicy: Never
+      containers:
+      - name: generate-genesis-job
+        image: {{ .Values.registries.main.registry }}/epm-autogeneradores-blockchain-fabric-tools:2.3.2-k8s
+        command: 
+          - "sh"
+          - "-c"
+          - "configtxgen -profile SampleEtcdRaftProfile -outputBlock genesis.block;
+            cat genesis.block | base64 > encoded.block;
+            genesis=$(cat encoded.block | tr -d '\n');
+            patch=\"[{\\\"op\\\":\\\"replace\\\",\\\"path\\\":\\\"/data/genesisblock\\\",\\\"value\\\":\\\"$genesis\\\"}]\";
+            kubectl patch secret hlf-genesis-block --type=json -p=\"$patch\""
+            
+        env:
+        - name: FABRIC_CFG_PATH
+          value: "/crypto"
+
+        volumeMounts:
+        - mountPath: /crypto/configtx.yaml
+          name: configtx
+          subPath: configtx.yaml
+          readOnly: true
+        - mountPath: /crypto/msp/cacerts
+          name: cacerts
+          readOnly: true
+        - mountPath: /crypto/msp/tlscacerts
+          name: tls-cacerts
+          readOnly: true
+        {{- if not (empty .Values.certificates.caIntermediate) }}
+        - mountPath: /crypto/msp/intermediatecerts
+          name: intermediatecerts
+          readOnly: true
+        {{- end }}
+        {{- if not (empty .Values.certificates.caIntermediateTls) }}
+        - mountPath: /crypto/msp/tlsintermediatecerts
+          name: tls-intermediatecerts
+          readOnly: true
+        {{- end }}
+        - mountPath: /crypto/msp/admincerts
+          name: admincerts
+          readOnly: true
+        {{- range $nodeNum := untilStep 1 ((add 1 .Values.orderer.count) | int) 1 }}
+        - mountPath: /crypto/orderers/orderer{{ $nodeNum }}/tls/server.crt
+          name: tls-orderer{{ $nodeNum }}cert
+          subPath: server.crt
+          readOnly: true
+        {{ end }}
+
+      volumes:
+        - name: configtx
+          secret:
+            secretName: hlf-configtx
+        - name: admincerts
+          secret:
+            secretName: hlf-orderer-admin-idcert
+        - name: cacerts
+          secret:
+            secretName: hlf-ca-root-idcert
+        {{- if not (empty .Values.certificates.caIntermediate) }}
+        - name: intermediatecerts
+          secret:
+            secretName: hlf-ca-intermediate-idcert
+        {{- end }}
+        - name: tls-cacerts
+          secret:
+            secretName: hlf-ca-root-idcert
+        {{- if not (empty .Values.certificates.caIntermediateTls) }}
+        - name: tls-intermediatecerts
+          secret:
+            secretName: hlf-ca-intermediate-idcert
+        {{- end }}
+        {{- range $nodeNum := untilStep 1 ((add 1 .Values.orderer.count) | int) 1 }}
+        - name: tls-orderer{{ $nodeNum }}cert
+          secret:
+            secretName: hlforderer{{ $nodeNum }}-tls-idcert
+        {{ end }}
+{{- end -}}

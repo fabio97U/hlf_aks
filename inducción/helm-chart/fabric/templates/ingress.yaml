@@ -1,0 +1,39 @@
+{{- $ordererDomain := .Values.orderer.domainName }}
+{{- $peerDomain := .Values.peer.domainName }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ingress
+  namespace: hlf
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+    nginx.ingress.kubernetes.io/ssl-passthrough: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+  {{ range $nodeNum := untilStep 1 ((add 1 .Values.peer.count) | int) 1 }}
+  - host: peer{{ $nodeNum }}.{{ $peerDomain }}
+    http:
+      paths:
+      - pathType: Prefix
+        path: /
+        backend:
+          service:
+            name: peer{{ $nodeNum }}
+            port:
+              number: 7051
+  {{ end }}
+  {{ range $nodeNum := untilStep 1 ((add 1 .Values.orderer.count) | int) 1 }}
+  - host: orderer{{ $nodeNum }}.{{ $ordererDomain }}
+    http:
+      paths:
+      - pathType: Prefix
+        path: /
+        backend:
+          service:
+            name: orderer{{ $nodeNum }}
+            port:
+              number: 7050
+  {{ end }}

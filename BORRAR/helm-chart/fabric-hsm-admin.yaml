@@ -1,0 +1,290 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fabric-admin
+  namespace: hlf
+spec:
+  imagePullSecrets:
+  - name: registry-secret
+  hostAliases:
+  - ip: "10.253.4.226"
+    hostnames:
+    - "peer1.ceiba.co"
+    - "peer2.ceiba.co"
+    - "orderer1.ceiba.co"
+    - "orderer2.ceiba.co"
+  containers:
+    - name: fabric-admin
+      imagePullPolicy: Always
+      image: acrepmnp.azurecr.io/epm-autogeneradores-blockchain-fabric-tools:2.3-luna6.3
+      stdin: true
+      tty: true
+      command: ["bash"]
+      args: ["-c", "while true; do sleep 1; done"]
+      workingDir: /var/hyperledger
+      env:
+      - name: HLF_PEER_ORG_NAME
+        valueFrom:
+          configMapKeyRef:
+            name: org-detail
+            key: peerOrgName
+      - name: HLF_PEER_DOMAIN_NAME
+        valueFrom:
+          configMapKeyRef:
+            name: org-detail
+            key: peerDomainName
+      - name: HLF_PEER_NODE_COUNT
+        valueFrom:
+          configMapKeyRef:
+            name: org-detail
+            key: peerCount
+      - name: HLF_ORDERER_ORG_NAME
+        valueFrom:
+          configMapKeyRef:
+            name: org-detail
+            key: ordererOrgName
+      - name: HLF_ORDERER_DOMAIN_NAME
+        valueFrom:
+          configMapKeyRef:
+            name: org-detail
+            key: ordererDomainName
+      - name: HLF_ORDERER_NODE_COUNT
+        valueFrom:
+          configMapKeyRef:
+            name: org-detail
+            key: ordererCount
+      - name: GOPATH
+        value: /var/hyperledger
+      - name: CORE_PEER_ID
+        value: cli
+      - name: CORE_PEER_TLS_ENABLED
+        value: "true"
+      - name: CORE_PEER_TLS_ROOTCERT_FILE
+        value: "/var/hyperledger/admin/tls/chain.crt"
+      - name: CORE_PEER_TLS_CLIENTAUTHREQUIRED
+        value: "true"
+      - name: CORE_PEER_TLS_CLIENTCERT_FILE
+        value: /var/hyperledger/admin/tls/client.crt
+      - name: CORE_PEER_TLS_CLIENTKEY_FILE
+        value: /var/hyperledger/admin/tls/client.key
+      - name: CORE_PEER_TLS_CLIENTROOTCAS_FILES
+        value: "/var/hyperledger/admin/tls/chain.crt"
+      - name: CORE_PEER_MSPCONFIGPATH
+        value: /var/hyperledger/admin/msp
+      - name: FABRIC_CFG_PATH
+        value: /var/hyperledger/admin
+      - name: ORDERER_TLS_CA
+        value: "/var/hyperledger/admin/tls/chain.crt"
+      - name: ADMIN_TLS_CERTFILE
+        value: /var/hyperledger/admin/tls/client.crt
+      - name: ADMIN_TLS_KEYFILE
+        value: /var/hyperledger/admin/tls/client.key
+      - name: FABRIC_LOGGING_SPEC
+        value: "grpc=debug:info"
+      - name:  CORE_PEER_BCCSP_DEFAULT
+        value: "PKCS11"
+      - name: CORE_PEER_BCCSP_PKCS11_LIBRARY
+        value: /usr/safenet/lunaclient/lib/libCryptoki2_64.so
+      - name: CORE_PEER_BCCSP_PKCS11_PIN
+        valueFrom:
+          secretKeyRef:
+            name: hsm-authentication
+            key: pin
+      - name: CORE_PEER_BCCSP_PKCS11_LABEL
+        valueFrom:
+          secretKeyRef:
+            name: hsm-authentication
+            key: label
+      - name:  ChrystokiConfigurationPath
+        value: "/usr/local/luna/config"
+      - name: CORE_PEER_BCCSP_PKCS11_HASH
+        value: "SHA2"
+      - name: CORE_PEER_BCCSP_PKCS11_SECURITY
+        value: "256"
+      - name: CORE_PEER_BCCSP_PKCS11_FILEKEYSTORE_KEYSTORE
+        value: "msp/keystore"
+      - name: GODEBUG
+        value: x509ignoreCN=0
+
+      volumeMounts:
+      - mountPath: /var/hyperledger/fabricScripts.sh
+        name: fabric-scripts
+        subPath: fabricScripts.sh
+      - mountPath: /var/hyperledger/src/chaincode/chaincode_test/go/simplechaincode.go
+        name: chaincode
+        subPath: chaincode.go
+      - mountPath: /var/hyperledger/admin/configtx.yaml
+        name: peerconfigtx
+        subPath: configtx.yaml
+        readOnly: true
+      - mountPath: /var/hyperledger/admin/core.yaml
+        name: hlf-core
+        subPath: core.yaml
+        readOnly: true
+      - mountPath: /var/hyperledger/admin/msp/admincerts/admin.crt
+        name: admin-signcerts
+        subPath: cert.pem
+        readOnly: true
+      - mountPath: /var/hyperledger/admin/msp/cacerts/ca.crt
+        name: cacerts
+        subPath: ca.crt
+        readOnly: true
+      - mountPath: /var/hyperledger/admin/msp/intermediatecerts/intermediate.crt
+        name: intermediatecerts
+        subPath: intermediate.crt
+        readOnly: true
+      - mountPath: /var/hyperledger/admin/msp/tlscacerts/ca.crt
+        name: cacerts
+        subPath: ca.crt
+        readOnly: true
+      - mountPath: /var/hyperledger/admin/msp/tlsintermediatecerts/intermediate.crt
+        name: intermediatecerts
+        subPath: intermediate.crt
+        readOnly: true
+      - mountPath: /var/hyperledger/admin/msp/signcerts/cert.pem
+        name: admin-signcerts
+        subPath: cert.pem
+        readOnly: true
+      - mountPath: /var/hyperledger/admin/msp/keystore/key.pem
+        subPath: key.pem
+        name: admin-keystore
+        readOnly: true
+      - mountPath: /var/hyperledger/admin/tls/chain.crt
+        name: tlscachaincert
+        subPath: chain.crt
+        readOnly: true
+      - mountPath: /var/hyperledger/admin/tls/client.crt
+        name: admin-tls-cert
+        subPath: cert.pem
+        readOnly: true
+      - mountPath: /var/hyperledger/admin/tls/client.key
+        name: admin-tls-key
+        subPath: key.pem
+        readOnly: true
+
+      - mountPath: /var/hyperledger/ordererAdmin/configtx.yaml
+        name: ordererconfigtx
+        subPath: configtx.yaml
+        readOnly: true
+      - mountPath: /var/hyperledger/ordererAdmin/core.yaml
+        name: hlf-core
+        subPath: core.yaml
+        readOnly: true
+      - mountPath: /var/hyperledger/ordererAdmin/msp/admincerts/admin.crt
+        name: orderer-admin-signcerts
+        subPath: cert.pem
+        readOnly: true
+      - mountPath: /var/hyperledger/ordererAdmin/msp/cacerts/ca.crt
+        name: cacerts
+        subPath: ca.crt
+        readOnly: true
+      - mountPath: /var/hyperledger/ordererAdmin/msp/intermediatecerts/intermediate.crt
+        name: intermediatecerts
+        subPath: intermediate.crt
+        readOnly: true
+      - mountPath: /var/hyperledger/ordererAdmin/msp/tlscacerts/ca.crt
+        name: cacerts
+        subPath: ca.crt
+        readOnly: true
+      - mountPath: /var/hyperledger/ordererAdmin/msp/tlsintermediatecerts/intermediate.crt
+        name: intermediatecerts
+        subPath: intermediate.crt
+        readOnly: true
+      - mountPath: /var/hyperledger/ordererAdmin/msp/signcerts/cert.pem
+        name: orderer-admin-signcerts
+        subPath: cert.pem
+        readOnly: true
+      - mountPath: /var/hyperledger/ordererAdmin/msp/keystore/key.pem
+        subPath: key.pem
+        name: orderer-admin-keystore
+        readOnly: true
+      - mountPath: /var/hyperledger/ordererAdmin/tls/chain.crt
+        name: tlscachaincert
+        subPath: chain.crt
+        readOnly: true
+      - mountPath: /var/hyperledger/ordererAdmin/tls/client.crt
+        name: orderer-admin-tls-cert
+        subPath: cert.pem
+        readOnly: true
+      - mountPath: /var/hyperledger/ordererAdmin/tls/client.key
+        name: orderer-admin-tls-key
+        subPath: key.pem
+        readOnly: true
+
+      - mountPath: /usr/local/luna/config/certs/server.pem
+        name: hsm-server-cert
+        subPath: server.pem
+        readOnly: true
+      - mountPath: /usr/local/luna/config/certs/VMSS01.pem
+        name: hsm-client-cert
+        subPath: VMSS01.pem
+        readOnly: true
+      - mountPath: /usr/local/luna/config/certs/VMSS01Key.pem
+        name: hsm-client-key
+        subPath: VMSS01Key.pem
+        readOnly: true
+      - mountPath: /usr/local/luna/config/Chrystoki.conf 
+        name: chrystoki-conf
+        subPath: Chrystoki.conf 
+        readOnly: true
+
+  volumes:
+      - name: peerconfigtx
+        secret:
+          secretName: hlf-peer-configtx
+      - name: ordererconfigtx
+        secret:
+          secretName: hlf-orderer-configtx
+      - name: hlf-core
+        secret:
+          secretName: hlf-core
+      - name: fabric-scripts
+        secret:
+          secretName: fabric-scripts
+          defaultMode: 0777
+      - name: chaincode
+        secret:
+          secretName: hlf-test-chaincode
+      - name: cacerts
+        secret:
+          secretName: hlf-ca-root-idcert
+      - name: intermediatecerts
+        secret:
+          secretName: hlf-ca-intermediate-idcert
+      - name: tlscachaincert
+        secret:
+          secretName: hlf-ca-chain-tls-idcert
+      - name: admin-signcerts
+        secret:
+          secretName: hlf-admin-idcert
+      - name: admin-keystore
+        emptyDir: {}
+      - name: admin-tls-cert
+        secret:
+          secretName: hlf-admin-tls-idcert
+      - name: admin-tls-key
+        secret:
+          secretName: hlf-admin-tls-idkey
+      - name: orderer-admin-signcerts
+        secret:
+          secretName: hlf-orderer-admin-idcert
+      - name: orderer-admin-keystore
+        emptyDir: {}
+      - name: orderer-admin-tls-cert
+        secret:
+          secretName: hlf-orderer-admin-tls-idcert
+      - name: orderer-admin-tls-key
+        secret:
+          secretName: hlf-orderer-admin-tls-idkey
+      - name: chrystoki-conf
+        secret:
+          secretName: chrystoki-conf
+      - name: hsm-server-cert
+        secret:
+          secretName: hsm-server-cert
+      - name: hsm-client-cert
+        secret:
+          secretName: hsm-client-cert
+      - name: hsm-client-key
+        secret:
+          secretName: hsm-client-key
